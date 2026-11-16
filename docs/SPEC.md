@@ -11,7 +11,7 @@ This file is the contract for every phase. If code and this file disagree, fix o
 ## Stack
 
 | Layer | Choice |
-|---|---|
+| --- | --- |
 | Language / framework | Java 21, Spring Boot 4.1.x, Maven (wrapper) |
 | Web | Spring Web MVC, Bean Validation |
 | Persistence | PostgreSQL 17, Spring Data JPA, Flyway migrations |
@@ -26,7 +26,7 @@ This file is the contract for every phase. If code and this file disagree, fix o
 
 ## Repository layout
 
-```
+```text
 backend/                     Spring Boot app, base package com.pollenz
   src/main/java/com/pollenz/
     common/                  error handling, shared types
@@ -61,7 +61,7 @@ Each feature package holds its own controller, service, repository, entity and D
 
 ## Data model
 
-```
+```text
 users          id, name, email (unique, lower-case), password_hash, upi_id (nullable), created_at
 communities    id, name, invite_code (unique, 8 chars), created_by -> users, created_at
 memberships    id, user_id, community_id, role (ADMIN | MEMBER), joined_at
@@ -80,7 +80,7 @@ messages       id, pool_id, sender_id -> users, body, created_at
 
 ## Pool lifecycle
 
-```
+```text
 OPEN --lock (host)-----------------------> LOCKED
 OPEN --closes_at passed, >= 2 members----> LOCKED     (scheduled job)
 OPEN --closes_at passed, < 2 members-----> EXPIRED    (scheduled job)
@@ -139,7 +139,7 @@ After `order` and after each `paid`, if every member is paid the pool becomes `S
 
 All routes are under `/api`. All need `Authorization: Bearer <jwt>` except register and login.
 
-```
+```text
 POST   /auth/register                      { name, email, password }        -> { token, user }
 POST   /auth/login                         { email, password }              -> { token, user }
 GET    /users/me
@@ -194,7 +194,7 @@ GET    /pools/{id}/messages                chat history, oldest first
 ## Phases
 
 | # | Scope |
-|---|---|
+| --- | --- |
 | 1 | Scaffold, docker-compose, Flyway V1 with the full schema, error handling, health check |
 | 2 | Auth, users, communities |
 | 3 | Pools, items, lifecycle, expiry job |
