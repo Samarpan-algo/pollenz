@@ -107,7 +107,9 @@ Rules:
   `NOT_IN_POOL`, 403 `NOT_HOST`, then 409 state errors.
 - Pool error codes: `POOL_NOT_FOUND`, `POOL_NOT_OPEN`, `ALREADY_IN_POOL`, `NOT_IN_POOL`,
   `HOST_CANNOT_LEAVE`, `ITEM_NOT_FOUND`, `NOT_YOUR_ITEM`, `NOT_HOST`, `INVALID_TRANSITION`,
-  `CONCURRENT_UPDATE`, `ALREADY_PAID`.
+  `CONCURRENT_UPDATE`, `ALREADY_PAID`, `MEMBER_NOT_FOUND`.
+- A pool is due when `closes_at <= now`. Leave, lock and cancel are not blocked by `closes_at`.
+- `currentAmountPaise` stays the sum of estimates after `order`; the final bill is the sum of shares.
 - `targetAmountPaise`, `estPricePaise`, `finalPricePaise` and `feesPaise` are capped at
   1,000,000,000 paise.
 - Responses: create pool 201 with pool detail; join, lock, cancel, order, deliver, paid 200 with
