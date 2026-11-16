@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: pollenz-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/pollenz}
+    username: ${DB_USER:pollenz}
+    password: ${DB_PASSWORD:pollenz}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

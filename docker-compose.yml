@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: pollenz
+      POSTGRES_USER: pollenz
+      POSTGRES_PASSWORD: pollenz
+    ports:
+      - "5432:5432"
+    volumes:
+      - pollenz-pgdata:/var/lib/postgresql/data
+
+volumes:
+  pollenz-pgdata:
