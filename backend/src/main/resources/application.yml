@@ -17,3 +17,14 @@ management:
     web:
       exposure:
         include: health
+
+pollenz:
+  cors-origin: ${CORS_ORIGIN:http://localhost:5173}
+  jwt:
+    # DEV ONLY default. Always set JWT_SECRET (>= 32 bytes) in any shared or production environment.
+    secret: ${JWT_SECRET:dev-only-insecure-secret-change-me-0123456789abcdef}
+    expiry-hours: 24
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

@@ -50,6 +50,11 @@ Each feature package holds its own controller, service, repository, entity and D
 - Errors use one JSON shape from a single `@RestControllerAdvice`:
   `{ "status": 409, "error": "POOL_NOT_OPEN", "message": "..." }`
   400 validation, 401 unauthenticated, 403 not allowed, 404 not found, 409 state conflict.
+  Generic codes: `VALIDATION_FAILED` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403),
+  `INTERNAL_ERROR` (500). Feature codes so far: `EMAIL_TAKEN`, `INVALID_CREDENTIALS`,
+  `COMMUNITY_NOT_FOUND`, `ALREADY_MEMBER`, `NOT_A_MEMBER`.
+- Creating a resource returns 201 with its DTO. The current user id reaches a controller as
+  `@AuthenticationPrincipal Long userId`.
 - Config through environment variables with local defaults: `DB_URL`, `DB_USER`, `DB_PASSWORD`,
   `JWT_SECRET`, `CORS_ORIGIN`.
 - Every service rule gets a test. Integration tests use Testcontainers, not H2.
