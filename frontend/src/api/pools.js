@@ -17,3 +17,5 @@ export const orderPool = (id, { feesPaise, items }) =>
   request(`/pools/${id}/order`, { method: 'POST', body: { feesPaise, items } })
 export const deliverPool = (id) => request(`/pools/${id}/deliver`, { method: 'POST' })
 export const markPaid = (id, memberId) => request(`/pools/${id}/members/${memberId}/paid`, { method: 'POST' })
+
+export const getMessages = (id) => request(`/pools/${id}/messages`)

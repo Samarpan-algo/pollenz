@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -50,10 +51,11 @@ public class PoolService {
 	private final CommunityService communityService;
 	private final UserRepository users;
 	private final Clock clock;
+	private final ApplicationEventPublisher events;
 
 	public PoolService(PoolRepository pools, PoolMemberRepository members, PoolItemRepository items,
 			CommunityRepository communities, CommunityService communityService, UserRepository users,
-			Clock clock) {
+			Clock clock, ApplicationEventPublisher events) {
 		this.pools = pools;
 		this.members = members;
 		this.items = items;
@@ -61,6 +63,7 @@ public class PoolService {
 		this.communityService = communityService;
 		this.users = users;
 		this.clock = clock;
+		this.events = events;
 	}
 
 	// ---- pools -------------------------------------------------------------------------------
@@ -104,6 +107,7 @@ public class PoolService {
 			// Final guard: the (pool_id, user_id) unique constraint.
 			throw alreadyInPool();
 		}
+		publish(poolId, PoolEventType.MEMBER_JOINED, userId, null);
 		return detail(pool, userId);
 	}
 
@@ -119,6 +123,7 @@ public class PoolService {
 		pool.requireOpen();
 		items.deleteByPoolMemberId(member.getId());
 		members.delete(member);
+		publish(poolId, PoolEventType.MEMBER_LEFT, userId, null);
 	}
 
 	// ---- items -------------------------------------------------------------------------------
@@ -128,6 +133,7 @@ public class PoolService {
 		PoolMember member = lockOpenPoolForMember(userId, poolId);
 		PoolItem item = items.save(new PoolItem(member.getId(), req.name().trim(), req.quantity(),
 				req.estPricePaise()));
+		publish(poolId, PoolEventType.ITEMS_CHANGED, userId, null);
 		return PoolItemResponse.from(item);
 	}
 
@@ -135,12 +141,14 @@ public class PoolService {
 	public PoolItemResponse updateItem(long userId, long poolId, long itemId, ItemRequest req) {
 		PoolItem item = requireOwnItem(lockOpenPoolForMember(userId, poolId), itemId);
 		item.update(req.name().trim(), req.quantity(), req.estPricePaise());
+		publish(poolId, PoolEventType.ITEMS_CHANGED, userId, null);
 		return PoolItemResponse.from(item);
 	}
 
 	@Transactional
 	public void deleteItem(long userId, long poolId, long itemId) {
 		items.delete(requireOwnItem(lockOpenPoolForMember(userId, poolId), itemId));
+		publish(poolId, PoolEventType.ITEMS_CHANGED, userId, null);
 	}
 
 	// ---- lifecycle ---------------------------------------------------------------------------
@@ -212,6 +220,7 @@ public class PoolService {
 		pool.apply(PoolTransition.ORDER);
 		settleIfAllPaid(pool);
 		pools.flush();
+		publishStatus(pool, userId);
 		return detail(pool, userId);
 	}
 
@@ -235,6 +244,10 @@ public class PoolService {
 		markPaid(member, clock.instant());
 		settleIfAllPaid(pool);
 		pools.flush();
+		publish(poolId, PoolEventType.PAYMENT_UPDATED, userId, null);
+		if (pool.getStatus() == PoolStatus.SETTLED) {
+			publishStatus(pool, userId);
+		}
 		return detail(pool, userId);
 	}
 
@@ -255,6 +268,7 @@ public class PoolService {
 		}
 		pool.apply(members.countByPoolId(poolId) >= 2 ? PoolTransition.LOCK : PoolTransition.EXPIRE);
 		pools.flush();
+		publishStatus(pool, null);
 		return Optional.of(pool.getStatus());
 	}
 
@@ -272,6 +286,7 @@ public class PoolService {
 		Pool pool = lockPoolAsHost(userId, poolId);
 		pool.apply(transition);
 		pools.flush();
+		publishStatus(pool, userId);
 		return detail(pool, userId);
 	}
 
@@ -399,6 +414,14 @@ public class PoolService {
 		return new PoolDetailResponse(pool.getId(), pool.getCommunityId(), pool.getPlatform(), pool.getTitle(),
 				pool.getTargetAmountPaise(), current, pool.getClosesAt(), pool.getPickupSpot(), pool.getStatus(),
 				pool.getFeesPaise(), host.getId(), host.getName(), viewerInPool ? host.getUpiId() : null, pool.getCreatedAt(), memberViews);
+	}
+
+	private void publishStatus(Pool pool, Long actorId) {
+		publish(pool.getId(), PoolEventType.POOL_UPDATED, actorId, pool.getStatus());
+	}
+
+	private void publish(long poolId, PoolEventType type, Long actorId, PoolStatus status) {
+		events.publishEvent(new PoolEvent(poolId, type, actorId, status));
 	}
 
 	private static ApiException poolNotFound() {

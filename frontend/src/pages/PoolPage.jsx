@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { usePoolDetail } from '../hooks/usePoolDetail.js'
 import { formatPaise } from '../lib/money.js'
 import { formatDateTime, timeLeft } from '../lib/time.js'
+import ChatPanel from '../components/pool/ChatPanel.jsx'
 import FinalBillForm from '../components/pool/FinalBillForm.jsx'
 import MemberList from '../components/pool/MemberList.jsx'
 import Payments from '../components/pool/Payments.jsx'
@@ -13,13 +14,13 @@ const BILLED = ['ORDERED', 'DELIVERED', 'SETTLED']
 
 export default function PoolPage() {
   const { id } = useParams()
-  // key resets the polling state when navigating between pools
+  // key resets the realtime state when navigating between pools
   return <PoolView key={id} id={id} />
 }
 
 function PoolView({ id }) {
   const { user } = useAuth()
-  const { pool, error, loading, refresh } = usePoolDetail(id)
+  const { pool, error, loading, refresh, realtime } = usePoolDetail(id)
 
   if (loading && !pool) return <Loading />
   if (!pool) return <ErrorText>{error?.message || 'Pool not found.'}</ErrorText>
@@ -62,6 +63,8 @@ function PoolView({ id }) {
       <Section title={`Members and items (${pool.members.length})`}>
         <MemberList pool={pool} user={user} refresh={refresh} />
       </Section>
+
+      {isMember && <ChatPanel poolId={pool.id} user={user} realtime={realtime} />}
     </>
   )
 }

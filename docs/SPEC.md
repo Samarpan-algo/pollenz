@@ -177,7 +177,19 @@ GET    /pools/{id}/messages                chat history, oldest first
 - Subscribe `/topic/pools/{id}`: receives `{ type, payload }` events. Types: `POOL_UPDATED`,
   `MEMBER_JOINED`, `MEMBER_LEFT`, `ITEMS_CHANGED`, `PAYMENT_UPDATED`, `CHAT_MESSAGE`.
 - Send `/app/pools/{id}/chat` with `{ body }`: saved, then broadcast as `CHAT_MESSAGE`.
-- Only pool members may subscribe or send.
+- Only pool members may subscribe or send. A rejected CONNECT, SUBSCRIBE or SEND gets an ERROR
+  frame and the connection is closed.
+- Events are published only after the database transaction commits. The client refetches the pool
+  detail over REST on every non-chat event and on every (re)connect. Non-members of a pool cannot
+  subscribe; the frontend polls every 15 s for them.
+- Non-chat payload: `{ poolId, actorId?, status? }`. `actorId` is absent for the expiry job;
+  `status` is present only on `POOL_UPDATED`. `hostUpiId` is never sent in an event.
+- `CHAT_MESSAGE` payload and each entry of `GET /pools/{id}/messages`:
+  `{ id, poolId, senderId, senderName, body, createdAt }`.
+- Chat: body is trimmed, 1 to 1000 characters, allowed in every pool status. History returns the
+  latest 200 messages, oldest first. A rejected chat message is reported on `/user/queue/errors`
+  as `{ status, error, message }` without closing the connection.
+- Frontend config: `VITE_API_URL` (default `/api`), `VITE_WS_URL` (default same host, `/ws`).
 
 ## Phases
 
