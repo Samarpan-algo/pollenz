@@ -1,5 +1,6 @@
 package com.pollenz.pool;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -21,16 +22,18 @@ public class PoolExpiryJob {
 
 	private final PoolRepository pools;
 	private final PoolService poolService;
+	private final Clock clock;
 
-	public PoolExpiryJob(PoolRepository pools, PoolService poolService) {
+	public PoolExpiryJob(PoolRepository pools, PoolService poolService, Clock clock) {
 		this.pools = pools;
 		this.poolService = poolService;
+		this.clock = clock;
 	}
 
 	@Scheduled(fixedDelayString = "${pollenz.pools.expiry-interval-ms:60000}",
 			initialDelayString = "${pollenz.pools.expiry-interval-ms:60000}")
 	public void run() {
-		expireDue(Instant.now());
+		expireDue(clock.instant());
 	}
 
 	/**

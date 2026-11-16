@@ -223,7 +223,11 @@ class PoolIntegrationTest extends IntegrationTestBase {
 		addItem(ravi.token(), poolId, "Coke", 1, 4000);
 		addItem(host.token(), poolId, "Milk", 2, 6800);
 
-		// Meera is a community member but not in the pool: she can still view it.
+		// Pool members see the host's UPI id.
+		getAuth("/api/pools/" + poolId, ravi.token())
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.hostUpiId").value("asha@okbank"));
+		// Meera is a community member but not in the pool: she can still view it, without the UPI id.
 		getAuth("/api/pools/" + poolId, meera.token())
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.id").value(poolId))
@@ -231,7 +235,7 @@ class PoolIntegrationTest extends IntegrationTestBase {
 				.andExpect(jsonPath("$.currentAmountPaise").value(16800))
 				.andExpect(jsonPath("$.hostId").value(host.id()))
 				.andExpect(jsonPath("$.hostName").value("Asha"))
-				.andExpect(jsonPath("$.hostUpiId").value("asha@okbank"))
+				.andExpect(jsonPath("$.hostUpiId").doesNotExist())
 				.andExpect(jsonPath("$.members.length()").value(2))
 				.andExpect(jsonPath("$.members[0].userId").value(host.id()))
 				.andExpect(jsonPath("$.members[0].name").value("Asha"))

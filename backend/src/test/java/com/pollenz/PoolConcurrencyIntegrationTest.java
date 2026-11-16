@@ -1,6 +1,7 @@
 package com.pollenz;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -173,6 +174,93 @@ class PoolConcurrencyIntegrationTest extends IntegrationTestBase {
 				}
 			}
 			assertThat(poolDetail(host, poolId).get("status").asString()).isEqualTo("LOCKED");
+		}
+	}
+
+	/** An ORDERED pool whose members (all but the host) are still unpaid; fees 100 each, no items. */
+	private long orderedPool(List<String> users, String title) throws Exception {
+		long poolId = createPool(host, communityId, title).get("id").asLong();
+		for (String u : users) {
+			joinPool(u, poolId);
+		}
+		lockPool(host, poolId);
+		order(host, poolId, orderBody(100L * (users.size() + 1))).andExpect(status().isOk());
+		return poolId;
+	}
+
+	private List<Long> unpaidMemberIds(long poolId) throws Exception {
+		List<Long> ids = new ArrayList<>();
+		for (JsonNode m : poolDetail(host, poolId).get("members")) {
+			if (!m.get("paid").asBoolean()) {
+				ids.add(m.get("memberId").asLong());
+			}
+		}
+		return ids;
+	}
+
+	/**
+	 * The host marks every member paid at the same moment. Each call is serialized on the pool row,
+	 * so exactly one of them sees the last unpaid member and settles the pool.
+	 */
+	@Test
+	void simultaneousPaymentsSettleExactlyOnce() throws Exception {
+		setUpCommunity();
+		List<String> users = communityMembers(8);
+		for (int round = 0; round < ROUNDS; round++) {
+			long poolId = orderedPool(users, "Round " + round);
+			List<Long> unpaid = unpaidMemberIds(poolId);
+			assertThat(unpaid).hasSize(users.size());
+
+			List<Callable<ResultActions>> calls = new ArrayList<>();
+			for (long memberId : unpaid) {
+				calls.add(() -> markPaid(host, poolId, memberId));
+			}
+			List<ResultActions> results = concurrently(calls);
+
+			assertThat(count(results, 200)).isEqualTo(users.size());
+			long settledResponses = 0;
+			for (ResultActions r : results) {
+				String poolStatus = json(r).get("status").asString();
+				if (poolStatus.equals("SETTLED")) {
+					settledResponses++;
+				}
+				else {
+					assertThat(poolStatus).isEqualTo("ORDERED");
+				}
+			}
+			assertThat(settledResponses).isEqualTo(1);
+			JsonNode finalState = poolDetail(host, poolId);
+			assertThat(finalState.get("status").asString()).isEqualTo("SETTLED");
+			for (JsonNode m : finalState.get("members")) {
+				assertThat(m.get("paid").asBoolean()).isTrue();
+			}
+		}
+	}
+
+	/** Two "paid" calls for the same member at once: one 200, one 409 ALREADY_PAID. */
+	@Test
+	void doublePaidOnSameMemberHasExactlyOneWinner() throws Exception {
+		setUpCommunity();
+		// Two members, so paying one does not settle the pool and the loser sees ALREADY_PAID.
+		List<String> users = communityMembers(2);
+		for (int round = 0; round < 5; round++) {
+			long poolId = orderedPool(users, "Round " + round);
+			long memberId = unpaidMemberIds(poolId).get(0);
+
+			List<ResultActions> results = concurrently(List.<Callable<ResultActions>>of(
+					() -> markPaid(host, poolId, memberId),
+					() -> markPaid(host, poolId, memberId)));
+
+			assertThat(count(results, 200)).isEqualTo(1);
+			assertThat(count(results, 409)).isEqualTo(1);
+			for (ResultActions r : results) {
+				if (statusOf(r) == 409) {
+					assertThat(errorOf(r)).isEqualTo("ALREADY_PAID");
+				}
+			}
+			JsonNode finalState = poolDetail(host, poolId);
+			assertThat(finalState.get("status").asString()).isEqualTo("ORDERED");
+			assertThat(unpaidMemberIds(poolId)).hasSize(1);
 		}
 	}
 

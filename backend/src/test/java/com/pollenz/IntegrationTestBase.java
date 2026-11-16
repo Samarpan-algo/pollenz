@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -32,11 +33,12 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Shared setup for HTTP-level integration tests. Every test registers its own users with unique
  * emails, so tests do not depend on run order or on each other's data.
- * Scheduled jobs are off here; tests call job methods directly.
+ * Scheduled jobs are off here; tests call job methods directly. The application clock is a
+ * {@link MutableClock}, reset to the system clock after every test.
  */
 @SpringBootTest(properties = "pollenz.scheduling.enabled=false")
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, TestClockConfiguration.class })
 public abstract class IntegrationTestBase {
 
 	protected static final String PASSWORD = "password123";
@@ -45,6 +47,14 @@ public abstract class IntegrationTestBase {
 
 	@Autowired
 	protected MockMvc mvc;
+
+	@Autowired
+	protected MutableClock clock;
+
+	@AfterEach
+	void resetClock() {
+		clock.reset();
+	}
 
 	/** A registered user: JWT plus user id. */
 	protected record TestUser(String token, long id) {
@@ -166,6 +176,42 @@ public abstract class IntegrationTestBase {
 
 	protected JsonNode poolDetail(String token, long poolId) throws Exception {
 		return json(getAuth("/api/pools/" + poolId, token).andExpect(status().isOk()));
+	}
+
+	protected void lockPool(String hostToken, long poolId) throws Exception {
+		postAuth("/api/pools/" + poolId + "/lock", hostToken).andExpect(status().isOk());
+	}
+
+	/** Body of the order action: {@code itemPrices} is pairs of item id and final price. */
+	protected static String orderBody(long feesPaise, long... itemPrices) {
+		StringBuilder items = new StringBuilder();
+		for (int i = 0; i < itemPrices.length; i += 2) {
+			if (i > 0) {
+				items.append(',');
+			}
+			items.append("""
+					{"itemId":%d,"finalPricePaise":%d}""".formatted(itemPrices[i], itemPrices[i + 1]));
+		}
+		return """
+				{"feesPaise":%d,"items":[%s]}""".formatted(feesPaise, items);
+	}
+
+	protected ResultActions order(String hostToken, long poolId, String body) throws Exception {
+		return postJson("/api/pools/" + poolId + "/order", hostToken, body);
+	}
+
+	protected ResultActions markPaid(String hostToken, long poolId, long memberId) throws Exception {
+		return postAuth("/api/pools/" + poolId + "/members/" + memberId + "/paid", hostToken);
+	}
+
+	/** The pool_members id of a user in a pool detail. */
+	protected static long memberIdOf(JsonNode detail, long userId) {
+		for (JsonNode m : detail.get("members")) {
+			if (m.get("userId").asLong() == userId) {
+				return m.get("memberId").asLong();
+			}
+		}
+		throw new AssertionError("User " + userId + " is not in pool " + detail.get("id"));
 	}
 
 	// ---- concurrency ----

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -183,6 +185,47 @@ class PoolItemIntegrationTest extends IntegrationTestBase {
 
 		JsonNode detail = poolDetail(ravi, poolId);
 		assertThat(detail.get("currentAmountPaise").asLong()).isEqualTo(2000);
+	}
+
+	/** Once closes_at has passed, joins and item changes stop even though the job has not run yet. */
+	@Test
+	void joinAndItemChangesStopAtClosesAtBeforeTheExpiryJob() throws Exception {
+		long itemId = addItem(ravi, poolId, "Chips", 1, 2000).get("id").asLong();
+		Instant closesAt = Instant.parse(poolDetail(host, poolId).get("closesAt").asString());
+
+		// One second before the deadline everything still works.
+		clock.freezeAt(closesAt.minusSeconds(1));
+		putJson(items() + "/" + itemId, ravi, itemBody("Chips", 2, 3000)).andExpect(status().isOk());
+
+		// At the deadline (closes_at <= now, the expiry job's own test) and after it: rejected.
+		for (Instant now : new Instant[] { closesAt, closesAt.plusSeconds(3600) }) {
+			clock.freezeAt(now);
+			postAuth("/api/pools/" + poolId + "/join", meera)
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error").value("POOL_NOT_OPEN"));
+			postJson(items(), ravi, itemBody("Coke", 1, 4000))
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error").value("POOL_NOT_OPEN"));
+			putJson(items() + "/" + itemId, ravi, itemBody("Coke", 1, 4000))
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error").value("POOL_NOT_OPEN"));
+			deleteAuth(items() + "/" + itemId, ravi)
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error").value("POOL_NOT_OPEN"));
+		}
+		// Membership and ownership are still checked first.
+		postJson(items(), meera, itemBody("Coke", 1, 4000))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error").value("NOT_IN_POOL"));
+
+		JsonNode detail = poolDetail(host, poolId);
+		assertThat(detail.get("status").asString()).isEqualTo("OPEN");
+		assertThat(detail.get("currentAmountPaise").asLong()).isEqualTo(3000);
+		assertThat(detail.get("members").size()).isEqualTo(2);
+
+		// Leaving stays allowed until the status changes.
+		deleteAuth("/api/pools/" + poolId + "/leave", ravi).andExpect(status().isNoContent());
+		assertThat(poolDetail(host, poolId).get("members").size()).isEqualTo(1);
 	}
 
 }

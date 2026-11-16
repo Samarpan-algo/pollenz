@@ -13,6 +13,9 @@ public interface PoolMemberRepository extends JpaRepository<PoolMember, Long> {
 
 	long countByPoolId(Long poolId);
 
+	/** True while at least one member of the pool is not marked paid. */
+	boolean existsByPoolIdAndPaidFalse(Long poolId);
+
 	/** Members in join order; the host, added at creation, comes first. */
 	List<PoolMember> findByPoolIdOrderById(Long poolId);
 

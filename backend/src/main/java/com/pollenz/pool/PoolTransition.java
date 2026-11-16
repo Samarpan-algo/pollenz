@@ -6,7 +6,7 @@ import java.util.Set;
 /**
  * The pool state machine: every allowed transition, with the statuses it may start from and the
  * status it leads to. {@link Pool#apply(PoolTransition)} is the only code that changes a pool's
- * status, so a new transition (phase 4: ORDER, DELIVER, SETTLE) is added here and nowhere else.
+ * status, so a new transition is added here and nowhere else.
  */
 public enum PoolTransition {
 
@@ -17,7 +17,16 @@ public enum PoolTransition {
 	EXPIRE(PoolStatus.EXPIRED, PoolStatus.OPEN),
 
 	/** Host cancels. */
-	CANCEL(PoolStatus.CANCELLED, PoolStatus.OPEN, PoolStatus.LOCKED);
+	CANCEL(PoolStatus.CANCELLED, PoolStatus.OPEN, PoolStatus.LOCKED),
+
+	/** Host submits the final prices and fees after placing the real order. */
+	ORDER(PoolStatus.ORDERED, PoolStatus.LOCKED),
+
+	/** Host confirms the order arrived. */
+	DELIVER(PoolStatus.DELIVERED, PoolStatus.ORDERED),
+
+	/** Automatic, once every member is paid (after {@code order} or after a {@code paid}). */
+	SETTLE(PoolStatus.SETTLED, PoolStatus.ORDERED, PoolStatus.DELIVERED);
 
 	private final PoolStatus target;
 	private final Set<PoolStatus> from;

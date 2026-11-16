@@ -86,4 +86,21 @@ public class PoolController {
 		return service.cancel(userId, id);
 	}
 
+	@PostMapping("/pools/{id}/order")
+	public PoolDetailResponse order(@AuthenticationPrincipal Long userId, @PathVariable long id,
+			@Valid @RequestBody OrderRequest req) {
+		return service.order(userId, id, req);
+	}
+
+	@PostMapping("/pools/{id}/deliver")
+	public PoolDetailResponse deliver(@AuthenticationPrincipal Long userId, @PathVariable long id) {
+		return service.deliver(userId, id);
+	}
+
+	@PostMapping("/pools/{id}/members/{memberId}/paid")
+	public PoolDetailResponse markPaid(@AuthenticationPrincipal Long userId, @PathVariable long id,
+			@PathVariable long memberId) {
+		return service.markMemberPaid(userId, id, memberId);
+	}
+
 }

@@ -43,7 +43,10 @@ class PoolExpiryIntegrationTest extends IntegrationTestBase {
 		communityId = community.get("id").asLong();
 	}
 
-	/** Moves the pool's deadline into the past (the API only accepts future deadlines). */
+	/**
+	 * Moves the pool's deadline to {@code ago} before now (the API only accepts future deadlines). A
+	 * negative {@code ago} puts it that far ahead.
+	 */
 	private void makeDue(long poolId, Duration ago) {
 		jdbc.update("update pools set closes_at = ? where id = ?", Timestamp.from(Instant.now().minus(ago)), poolId);
 	}
@@ -191,16 +194,21 @@ class PoolExpiryIntegrationTest extends IntegrationTestBase {
 		}
 	}
 
+	/**
+	 * A join racing the job. Joins are refused once {@code closes_at} has passed, so the deadline stays
+	 * 30 s ahead for the join while the job runs as of a minute from now: either may take the row lock
+	 * first.
+	 */
 	@Test
 	void expiryRacingJoinCountsTheMemberConsistently() throws Exception {
 		setUpCommunity();
 		for (int round = 0; round < 5; round++) {
 			long poolId = createPool(host, communityId, "Race " + round).get("id").asLong();
-			makeDue(poolId, Duration.ofSeconds(1));
+			makeDue(poolId, Duration.ofSeconds(-30));
 
 			List<Object> results = concurrently(List.<Callable<Object>>of(
 					() -> postAuth("/api/pools/" + poolId + "/join", ravi),
-					() -> expiryJob.expireDue(Instant.now())));
+					() -> expiryJob.expireDue(Instant.now().plus(Duration.ofMinutes(1)))));
 			ResultActions join = (ResultActions) results.get(0);
 
 			JsonNode detail = poolDetail(host, poolId);
