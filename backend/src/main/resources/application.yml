@@ -24,6 +24,12 @@ pollenz:
     # DEV ONLY default. Always set JWT_SECRET (>= 32 bytes) in any shared or production environment.
     secret: ${JWT_SECRET:dev-only-insecure-secret-change-me-0123456789abcdef}
     expiry-hours: 24
+  scheduling:
+    # Integration tests set this to false and call the jobs directly.
+    enabled: true
+  pools:
+    # How often the expiry job looks for OPEN pools past closes_at.
+    expiry-interval-ms: 60000
 
 springdoc:
   swagger-ui:

@@ -97,8 +97,21 @@ Rules:
 - Join, leave and item changes are allowed only while `OPEN`. The host cannot leave; they cancel.
 - A member edits only their own items.
 - Any other transition is rejected with 409.
-- Concurrent joins and transitions must not corrupt state: unique constraint plus `@Version`,
-  inside one transaction.
+- Joins and item changes are also rejected (409 `POOL_NOT_OPEN`) once `closes_at` has passed, even
+  if the expiry job has not run yet.
+- Concurrency: every write to a pool, its members or its items first takes a row lock on the pool
+  (`SELECT ... FOR UPDATE`), then checks status and ownership. Writes to one pool are therefore
+  serialized. Backstops: the `(pool_id, user_id)` unique constraint and the `@Version` column
+  (409 `CONCURRENT_UPDATE`).
+- Check order on pool routes: 404 `POOL_NOT_FOUND`, 403 `NOT_A_MEMBER` (community), 403
+  `NOT_IN_POOL`, 403 `NOT_HOST`, then 409 state errors.
+- Pool error codes: `POOL_NOT_FOUND`, `POOL_NOT_OPEN`, `ALREADY_IN_POOL`, `NOT_IN_POOL`,
+  `HOST_CANNOT_LEAVE`, `ITEM_NOT_FOUND`, `NOT_YOUR_ITEM`, `NOT_HOST`, `INVALID_TRANSITION`,
+  `CONCURRENT_UPDATE`, `ALREADY_PAID`.
+- `targetAmountPaise`, `estPricePaise`, `finalPricePaise` and `feesPaise` are capped at
+  1,000,000,000 paise.
+- Responses: create pool 201 with pool detail; join, lock, cancel, order, deliver, paid 200 with
+  pool detail; add item 201 and edit item 200 with the item; leave and delete item 204.
 
 ## Bill split (the `order` action)
 
@@ -111,9 +124,14 @@ other shared charge; 0 if the pool crossed the free-delivery minimum).
 - The host's `paid` is set to true at once: they paid the app directly.
 - Invariant: the sum of all shares equals the sum of all final item totals plus `feesPaise`.
 
-Payment: the host's `upi_id` is exposed to pool members so the frontend can build a
-`upi://pay?pa=...&am=...` link. The host marks each member paid. When all are paid the pool
-becomes `SETTLED`.
+- `order` is host only, from `LOCKED`. The body must list every item of the pool exactly once;
+  `finalPricePaise >= 0` (0 means the item was unavailable) and `feesPaise >= 0`.
+
+Payment: the host's `upi_id` is exposed in the pool detail (`hostUpiId`) only to pool members,
+null for everyone else, so the frontend can build a `upi://pay?pa=...&am=...` link. The host marks
+each member paid with `POST /pools/{id}/members/{memberId}/paid`, where `memberId` is the
+`pool_members` id; allowed in `ORDERED` or `DELIVERED`; marking twice gives 409 `ALREADY_PAID`.
+After `order` and after each `paid`, if every member is paid the pool becomes `SETTLED`.
 
 ## REST API
 

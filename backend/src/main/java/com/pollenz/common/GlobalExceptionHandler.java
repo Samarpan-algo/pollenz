@@ -2,6 +2,7 @@ package com.pollenz.common;
 
 import java.util.stream.Collectors;
 
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -37,6 +38,15 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
 	public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
 		return build(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Invalid value for " + ex.getName());
+	}
+
+	/**
+	 * Optimistic-lock (@Version) conflicts and lock-acquisition failures. Pool writes take a row lock
+	 * first, so this is a backstop rather than an expected path.
+	 */
+	@ExceptionHandler(ConcurrencyFailureException.class)
+	public ResponseEntity<ApiError> handleConcurrency(ConcurrencyFailureException ex) {
+		return build(HttpStatus.CONFLICT, "CONCURRENT_UPDATE", "The resource was changed concurrently; retry");
 	}
 
 	@ExceptionHandler(Exception.class)
