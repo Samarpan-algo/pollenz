@@ -2,7 +2,7 @@ spring:
   application:
     name: pollenz-backend
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/pollenz}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/pollenz}
     username: ${DB_USER:pollenz}
     password: ${DB_PASSWORD:pollenz}
   jpa:
